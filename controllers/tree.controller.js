@@ -19,6 +19,7 @@ const addNodes = async (req, res) => {
 };
 
 const addEdges = async (req, res) => {
+  const done = [];
   try {
     const { edges } = req.body;
     if (!edges || edges === undefined || !edges.length) {
@@ -27,14 +28,33 @@ const addEdges = async (req, res) => {
     for (let i = 0; i < edges.length; i++) {
       const u = edges[i][0],
         v = edges[i][1];
-      await treeModel.findOneAndUpdate({ node: u }, { $push: { nbrs: v } });
-      await treeModel.findOneAndUpdate({ node: v }, { $push: { nbrs: u } });
+      const doc = await treeModel.find({ $or: [{ node: u }, { node: v }] });
+      if (
+        doc.length < 2 ||
+        doc[0].nbrs.length == 2 ||
+        doc[1].nbrs.length == 2
+      ) {
+        throw new Error(
+          "Either nodes have 2 children or nodes are not present"
+        );
+      }
+      let present = false;
+      for (const val of doc[0].nbrs) {
+        if (val == v) {
+          present = true;
+        }
+      }
+      if (present) continue;
+      done.push([u, v]);
+      await treeModel.findOneAndUpdate({ node: u }, { $addToSet: { nbrs: v } });
+      await treeModel.findOneAndUpdate({ node: v }, { $addToSet: { nbrs: u } });
     }
     const tree = await treeModel.find({});
     return res.status(200).json({ tree: tree });
   } catch (err) {
     return res.status(400).json({
       error: err.message,
+      edgesAdded: done,
     });
   }
 };
@@ -63,7 +83,6 @@ const bfs = async (req, res) => {
         }
       }
       bfsTraversal[lvl++] = curr;
-      console.log(bfsTraversal);
     }
     return res.status(200).json({ bfs: bfsTraversal });
   } catch (err) {
@@ -72,4 +91,26 @@ const bfs = async (req, res) => {
     });
   }
 };
-module.exports = { addNodes, addEdges, bfs };
+
+const removeEdges = async (req, res) => {
+  try {
+    const { edges } = req.body;
+    if (!edges || edges === undefined || !edges.length) {
+      throw new Error("Edges not found!");
+    }
+    for (let i = 0; i < edges.length; i++) {
+      const u = edges[i][0],
+        v = edges[i][1];
+      await treeModel.findOneAndUpdate({ node: u }, { $pull: { nbrs: v } });
+      await treeModel.findOneAndUpdate({ node: v }, { $pull: { nbrs: u } });
+    }
+    return res.status(200).json({
+      message: "success",
+    });
+  } catch (err) {
+    return res.status(400).json({
+      error: err.message,
+    });
+  }
+};
+module.exports = { addNodes, addEdges, bfs, removeEdges };

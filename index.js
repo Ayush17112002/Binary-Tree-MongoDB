@@ -10,6 +10,7 @@ const treeModel = require("./models/tree.model");
 app.put("/addNodes", treeController.addNodes);
 app.put("/addEdges", treeController.addEdges);
 app.get("/bfs/:root", treeController.bfs);
+app.delete("/removeEdges", treeController.removeEdges);
 app.listen(PORT, (err) => {
   if (err) {
     console.error("Error in running the server!");
